@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>A Rose for My Love</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #1a1a1a;
+    }
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+<script>
+// Constants
+const FLOWER_SCALE = 2;      // New constant to scale overall flower size
+const LAYERS = 4;            // Number of petal layers
+const PETALS_PER_LAYER = 6;  // Petals per layer
+const BLOOM_DURATION = 180;  // Frames to fully bloom (3 seconds at 60 FPS)
+const MAX_BLOOM = 0.5;       // Maximum bloom factor (50% open)
+
+// Global variables
+let bloom = 0;               // Bloom progress (0 to MAX_BLOOM)
+let hearts = [];             // Array of hearts
+let phase = 0;               // 0: blooming, 1: hearts and text
+
+function setup() {
+  createCanvas(windowWidth, windowHeight);
+  angleMode(DEGREES);
+  textFont('Georgia');
+}
+
+function draw() {
+  // Gradient background
+  setGradient(0, 0, width, height, color(30, 20, 40), color(0, 0, 10), "Y");
+
+  // Center of the canvas
+  let cx = width / 2;
+  let cy = height / 2;
+
+  // Update bloom
+  if (bloom < MAX_BLOOM) {
+    bloom += MAX_BLOOM / BLOOM_DURATION;
+    bloom = min(bloom, MAX_BLOOM); // Ensure it doesn't exceed MAX_BLOOM
+  } else if (phase === 0) {
+    phase = 1; // Transition to hearts and text
+  }
+
+  // Draw the rose
+  push();
+  translate(cx, cy);
+  drawRose(bloom);
+  pop();
+
+  // Handle hearts and text in phase 1
+  if (phase === 1) {
+    updateHearts();
+    displayLoveText();
+    if (frameCount % 20 === 0) { // Add hearts periodically
+      hearts.push(new Heart(cx, cy));
+    }
+  }
+}
+
+// Gradient background function
+function setGradient(x, y, w, h, c1, c2, axis) {
+  noFill();
+  if (axis === "Y") {
+    for (let i = y; i <= y + h; i++) {
+      let inter = map(i, y, y + h, 0, 1);
+      let c = lerpColor(c1, c2, inter);
+      stroke(c);
+      line(x, i, x + w, i);
+    }
+  }
+}
+
+// Draw the multi-layered rose
+function drawRose(bloomFactor) {
+  for (let layer = 0; layer < LAYERS; layer++) {
+    // Increase the radius by multiplying with FLOWER_SCALE
+    let radius = FLOWER_SCALE * (15 + layer * 15);
+    let layerBloom = pow(bloomFactor, 1 + layer * 0.5); // More differential blooming (inner layers open less)
+    let angleOffset = layer * 20; // Increased angle offset for more natural petal arrangement
+
+    for (let i = 0; i < PETALS_PER_LAYER; i++) {
+      let angle = (360 / PETALS_PER_LAYER) * i + angleOffset;
+      push();
+      rotate(angle);
+      translate(radius * layerBloom, 0);
+      rotate((1 - layerBloom) * -90); // Petals open from closed position
+      drawPetal(bloomFactor, layer);
+      pop();
+    }
+  }
+
+  // Rose center (glowing bud) - Made deeper by using full opacity
+  fill(255, 220, 100, 255);
+  noStroke();
+  ellipse(0, 0, FLOWER_SCALE * (20 + bloomFactor * 20), FLOWER_SCALE * (20 + bloomFactor * 20));
+}
+
+// Draw a single petal with texture
+function drawPetal(bloomFactor, layer) {
+  // Multiply petalLength and petalWidth by FLOWER_SCALE to increase overall size
+  let petalLength = FLOWER_SCALE * lerp(20, 60, bloomFactor); 
+  let petalWidth = FLOWER_SCALE * lerp(8, 20, bloomFactor);   
+  let curveFactor = 1 - bloomFactor * 0.5;     
+  let baseColor = lerpColor(color(255, 150, 170), color(200, 0, 50), layer / (LAYERS - 1));
+
+  // Petal shape with more curvature
+  noStroke();
+  fill(baseColor);
+  beginShape();
+  vertex(0, 0);
+  bezierVertex(petalWidth * curveFactor, petalLength / 3, petalWidth, petalLength * 2 / 3, 0, petalLength);
+  bezierVertex(-petalWidth, petalLength * 2 / 3, -petalWidth * curveFactor, petalLength / 3, 0, 0);
+  endShape(CLOSE);
+
+  // Add subtle texture with lighter streaks
+  stroke(255, 200, 200, 50);
+  strokeWeight(1);
+  for (let i = -petalWidth / 2; i < petalWidth / 2; i += 4) {
+    line(i, petalLength / 4, i + 1, petalLength * 3 / 4);
+  }
+}
+
+// Heart class
+class Heart {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.size = random(20, 40);
+    this.angle = random(360);
+    this.speed = random(1, 2);
+    this.alpha = 255;
+    this.pulse = 0;
+  }
+
+  update() {
+    this.x += cos(this.angle) * this.speed;
+    this.y += sin(this.angle) * this.speed;
+    this.alpha -= 2;
+    this.pulse += 0.1;
+    this.size = 20 + 5 * sin(this.pulse); // Pulsing effect
+  }
+
+  display() {
+    push();
+    translate(this.x, this.y);
+    fill(255, 0, 0, this.alpha);
+    noStroke();
+    beginShape();
+    for (let t = 0; t < 360; t += 5) {
+      let xt = 16 * pow(sin(t), 3);
+      let yt = 13 * cos(t) - 5 * cos(2 * t) - 2 * cos(3 * t) - cos(4 * t);
+      vertex((this.size / 20) * xt, -(this.size / 20) * yt);
+    }
+    endShape(CLOSE);
+    pop();
+  }
+
+  isOffScreen() {
+    return this.alpha <= 0 || this.x < 0 || this.x > width || this.y < 0 || this.y > height;
+  }
+}
+
+function updateHearts() {
+  for (let i = hearts.length - 1; i >= 0; i--) {
+    hearts[i].update();
+    hearts[i].display();
+    if (hearts[i].isOffScreen()) {
+      hearts.splice(i, 1);
+    }
+  }
+}
+
+// Display love message
+function displayLoveText() {
+  let alpha = min(255, (frameCount - BLOOM_DURATION) * 5); // Fade in
+  textAlign(CENTER, CENTER);
+  textSize(40);
+  fill(255, 100, 150, alpha);
+  text("My Love for You", width / 2, height * 0.8);
+  textSize(24);
+  fill(255, 200, 200, alpha);
+  text("Blooms Forever", width / 2, height * 0.85);
+}
+
+// Handle window resize
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
+}
+</script>
+</body>
+</html>
